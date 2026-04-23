@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getTodayIso } from "@/lib/habits";
+import { getTodayIso, validateHabitName } from "@/lib/habits";
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = {
@@ -41,11 +41,13 @@ export async function addHabit(input: { name: string }): Promise<ActionResult> {
     return { error: authError ?? "You need to be logged in." };
   }
 
-  const name = input.name.trim();
+  const validationError = validateHabitName(input.name);
 
-  if (!name) {
-    return { error: "Enter a habit name." };
+  if (validationError) {
+    return { error: validationError };
   }
+
+  const name = input.name.trim();
 
   const { error } = await supabase.from("habits").insert({
     user_id: user.id,
@@ -63,6 +65,68 @@ export async function addHabit(input: { name: string }): Promise<ActionResult> {
   }
 
   revalidatePath("/");
+  return {};
+}
+
+export async function updateHabitName(input: {
+  habitId: string;
+  newName: string;
+}): Promise<ActionResult> {
+  const { supabase, user, error: authError } = await getAuthenticatedContext();
+
+  if (authError || !user) {
+    return { error: authError ?? "You need to be logged in." };
+  }
+
+  const validationError = validateHabitName(input.newName);
+
+  if (validationError) {
+    return { error: validationError };
+  }
+
+  const trimmedName = input.newName.trim();
+
+  const { data: habit, error: habitError } = await supabase
+    .from("habits")
+    .select("id, user_id")
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", false)
+    .single();
+
+  if (habitError || !habit) {
+    const databaseError = getDatabaseErrorMessage(habitError);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "That habit is unavailable." };
+  }
+
+  if (habit.user_id !== user.id) {
+    return { error: "You can only update your own habits." };
+  }
+
+  const { error } = await supabase
+    .from("habits")
+    .update({ name: trimmedName })
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", false);
+
+  if (error) {
+    const databaseError = getDatabaseErrorMessage(error);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "Could not update that habit name." };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/summary");
   return {};
 }
 
@@ -167,5 +231,113 @@ export async function archiveHabit(input: {
   }
 
   revalidatePath("/");
+  return {};
+}
+
+export async function restoreHabit(input: {
+  habitId: string;
+}): Promise<ActionResult> {
+  const { supabase, user, error: authError } = await getAuthenticatedContext();
+
+  if (authError || !user) {
+    return { error: authError ?? "You need to be logged in." };
+  }
+
+  const { data: habit, error: habitError } = await supabase
+    .from("habits")
+    .select("id, user_id")
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", true)
+    .single();
+
+  if (habitError || !habit) {
+    const databaseError = getDatabaseErrorMessage(habitError);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "That archived habit is unavailable." };
+  }
+
+  if (habit.user_id !== user.id) {
+    return { error: "You can only restore your own habits." };
+  }
+
+  const { error } = await supabase
+    .from("habits")
+    .update({ archived: false })
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", true);
+
+  if (error) {
+    const databaseError = getDatabaseErrorMessage(error);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "Could not restore that habit." };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/summary");
+  revalidatePath("/settings/archived");
+  return {};
+}
+
+export async function deleteHabitPermanently(input: {
+  habitId: string;
+}): Promise<ActionResult> {
+  const { supabase, user, error: authError } = await getAuthenticatedContext();
+
+  if (authError || !user) {
+    return { error: authError ?? "You need to be logged in." };
+  }
+
+  const { data: habit, error: habitError } = await supabase
+    .from("habits")
+    .select("id, user_id")
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", true)
+    .single();
+
+  if (habitError || !habit) {
+    const databaseError = getDatabaseErrorMessage(habitError);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "That archived habit is unavailable." };
+  }
+
+  if (habit.user_id !== user.id) {
+    return { error: "You can only delete your own habits." };
+  }
+
+  const { error } = await supabase
+    .from("habits")
+    .delete()
+    .eq("id", input.habitId)
+    .eq("user_id", user.id)
+    .eq("archived", true);
+
+  if (error) {
+    const databaseError = getDatabaseErrorMessage(error);
+
+    if (databaseError) {
+      return { error: databaseError };
+    }
+
+    return { error: "Could not delete that habit." };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/summary");
+  revalidatePath("/settings/archived");
   return {};
 }

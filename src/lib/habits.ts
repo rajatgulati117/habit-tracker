@@ -24,6 +24,22 @@ export type TrailingDay = {
   dateLabel: string;
 };
 
+export const MAX_HABIT_NAME_LENGTH = 100;
+
+export function validateHabitName(name: string) {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    return "Enter a habit name.";
+  }
+
+  if (trimmedName.length > MAX_HABIT_NAME_LENGTH) {
+    return `Habit names must be ${MAX_HABIT_NAME_LENGTH} characters or fewer.`;
+  }
+
+  return null;
+}
+
 export function formatLocalDateToIso(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");

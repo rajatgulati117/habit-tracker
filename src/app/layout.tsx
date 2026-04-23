@@ -62,6 +62,12 @@ export default async function RootLayout({
                     >
                       Summary
                     </Link>
+                    <Link
+                      href="/settings/archived"
+                      className="rounded-full px-2.5 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 sm:hidden"
+                    >
+                      Settings
+                    </Link>
                   </nav>
                 ) : null}
               </div>
@@ -76,6 +82,32 @@ export default async function RootLayout({
                       {user.email}
                     </p>
                   </div>
+
+                  <Link
+                    href="/settings/archived"
+                    aria-label="Open settings"
+                    className="hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 sm:inline-flex"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      className="h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M8.18 2.638a1 1 0 0 1 1.64 0l.56.812a1 1 0 0 0 1.064.4l.96-.214a1 1 0 0 1 1.306.99l.033.985a1 1 0 0 0 .69.915l.936.303a1 1 0 0 1 .507 1.56l-.57.806a1 1 0 0 0 0 1.18l.57.805a1 1 0 0 1-.507 1.56l-.936.304a1 1 0 0 0-.69.914l-.033.985a1 1 0 0 1-1.306.99l-.96-.214a1 1 0 0 0-1.064.4l-.56.812a1 1 0 0 1-1.64 0l-.56-.812a1 1 0 0 0-1.064-.4l-.96.214a1 1 0 0 1-1.306-.99l-.033-.985a1 1 0 0 0-.69-.914l-.936-.304a1 1 0 0 1-.507-1.56l.57-.806a1 1 0 0 0 0-1.18l-.57-.805a1 1 0 0 1 .507-1.56l.936-.303a1 1 0 0 0 .69-.915l.033-.985a1 1 0 0 1 1.306-.99l.96.214a1 1 0 0 0 1.064-.4l.56-.812Z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M11.75 10a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0Z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </Link>
 
                   <form action="/logout" method="post">
                     <button

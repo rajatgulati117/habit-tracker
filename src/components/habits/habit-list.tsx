@@ -2,19 +2,29 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toggleHabitCompletion } from "@/app/(protected)/actions";
+import {
+  toggleHabitCompletion,
+  updateHabitName,
+} from "@/app/(protected)/actions";
+import { HabitRow } from "@/components/habits/habit-row";
 import type { HabitListItem } from "@/lib/habits";
-import { ArchiveButton } from "@/components/habits/archive-button";
 
 type HabitListProps = {
   habits: HabitListItem[];
   todayLabel: string;
 };
 
-type TogglePayload = {
-  habitId: string;
-  nextCompleted: boolean;
-};
+type OptimisticPayload =
+  | {
+      type: "toggle";
+      habitId: string;
+      nextCompleted: boolean;
+    }
+  | {
+      type: "rename";
+      habitId: string;
+      nextName: string;
+    };
 
 export function HabitList({ habits, todayLabel }: HabitListProps) {
   const router = useRouter();
@@ -23,10 +33,17 @@ export function HabitList({ habits, todayLabel }: HabitListProps) {
   const [, startTransition] = useTransition();
   const [optimisticHabits, updateOptimisticHabits] = useOptimistic(
     habits,
-    (state, payload: TogglePayload) =>
+    (state, payload: OptimisticPayload) =>
       state.map((habit) => {
         if (habit.id !== payload.habitId) {
           return habit;
+        }
+
+        if (payload.type === "rename") {
+          return {
+            ...habit,
+            name: payload.nextName,
+          };
         }
 
         const nextStreak = payload.nextCompleted
@@ -52,6 +69,7 @@ export function HabitList({ habits, todayLabel }: HabitListProps) {
     setErrorMessage(null);
 
     updateOptimisticHabits({
+      type: "toggle",
       habitId: habit.id,
       nextCompleted,
     });
@@ -69,6 +87,7 @@ export function HabitList({ habits, todayLabel }: HabitListProps) {
 
         if (result.error) {
           updateOptimisticHabits({
+            type: "toggle",
             habitId: habit.id,
             nextCompleted: habit.completedToday,
           });
@@ -84,6 +103,34 @@ export function HabitList({ habits, todayLabel }: HabitListProps) {
         });
       })();
     });
+  }
+
+  async function handleRename(habit: HabitListItem, nextName: string) {
+    updateOptimisticHabits({
+      type: "rename",
+      habitId: habit.id,
+      nextName,
+    });
+
+    const result = await updateHabitName({
+      habitId: habit.id,
+      newName: nextName,
+    });
+
+    if (result.error) {
+      updateOptimisticHabits({
+        type: "rename",
+        habitId: habit.id,
+        nextName: habit.name,
+      });
+      return result;
+    }
+
+    startTransition(() => {
+      router.refresh();
+    });
+
+    return result;
   }
 
   if (optimisticHabits.length === 0) {
@@ -128,55 +175,13 @@ export function HabitList({ habits, todayLabel }: HabitListProps) {
           const isPending = Boolean(pendingIds[habit.id]);
 
           return (
-            <article
+            <HabitRow
               key={habit.id}
-              className="flex flex-col gap-4 rounded-[1.75rem] border border-slate-100 bg-slate-50/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex items-start gap-4">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={habit.completedToday}
-                  aria-label={`Toggle ${habit.name} for today`}
-                  onClick={() => handleToggle(habit)}
-                  disabled={isPending}
-                  className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
-                    habit.completedToday
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-slate-300 bg-white text-transparent"
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  <svg
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="h-4 w-4"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.2 7.25a1 1 0 0 1-1.42 0L3.3 9.165a1 1 0 1 1 1.414-1.414l4.086 4.085 6.493-6.54a1 1 0 0 1 1.411-.006Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {habit.name}
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-600">
-                    <span className="rounded-full bg-white px-3 py-1">
-                      {habit.completedToday ? "Completed today" : "Not done yet"}
-                    </span>
-                    <span className="rounded-full bg-white px-3 py-1">
-                      {habit.streak} day{habit.streak === 1 ? "" : "s"} streak
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <ArchiveButton habitId={habit.id} />
-            </article>
+              habit={habit}
+              isTogglePending={isPending}
+              onToggle={handleToggle}
+              onRename={handleRename}
+            />
           );
         })}
       </div>

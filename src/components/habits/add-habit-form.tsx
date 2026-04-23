@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addHabit } from "@/app/(protected)/actions";
+import { MAX_HABIT_NAME_LENGTH } from "@/lib/habits";
 
 export function AddHabitForm() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export function AddHabitForm() {
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Drink water"
-          maxLength={120}
+          maxLength={MAX_HABIT_NAME_LENGTH}
           className="min-h-12 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
         />
         <button
