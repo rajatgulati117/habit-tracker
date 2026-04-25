@@ -2,11 +2,15 @@ import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
 import { AddHabitForm } from "@/components/habits/add-habit-form";
 import { HabitList } from "@/components/habits/habit-list";
+import { type CategoryOption, type CategoryRow } from "@/lib/categories";
 import {
-  calculateCurrentStreak,
+  calculateHabitStreaks,
   formatTodayLabel,
   getTodayIso,
+  isHabitDayCompleted,
+  isHabitExpectedOnDate,
   isMissingHabitsTableError,
+  isHabitCompletedForValue,
   type HabitCompletionRow,
   type HabitListItem,
   type HabitRow,
@@ -16,25 +20,100 @@ import { createClient } from "@/lib/supabase/server";
 function buildHabitItems(
   habits: HabitRow[],
   completions: HabitCompletionRow[],
+  categories: CategoryOption[],
   todayIso: string,
 ) {
   const completionsByHabit = new Map<string, string[]>();
+  const completionValueByHabitAndDate = new Map<string, number | null>();
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const habitsById = new Map(habits.map((habit) => [habit.id, habit]));
 
   completions.forEach((completion) => {
     const list = completionsByHabit.get(completion.habit_id) ?? [];
-    list.push(completion.completed_on);
+    completionValueByHabitAndDate.set(
+      `${completion.habit_id}:${completion.completed_on}`,
+      completion.value ?? null,
+    );
+
+    const habit = habitsById.get(completion.habit_id);
+    const habitType = habit?.habit_type ?? "boolean";
+    const targetValue = habit?.target_value ?? null;
+
+    if (
+      isHabitCompletedForValue(
+        habitType,
+        completion.value ?? null,
+        targetValue,
+      )
+    ) {
+      list.push(completion.completed_on);
+    }
+
     completionsByHabit.set(completion.habit_id, list);
   });
 
   return habits.map<HabitListItem>((habit) => {
     const completionDates = completionsByHabit.get(habit.id) ?? [];
+    const currentValue =
+      completionValueByHabitAndDate.get(`${habit.id}:${todayIso}`) ?? null;
+    const hasCompletionToday = completionValueByHabitAndDate.has(
+      `${habit.id}:${todayIso}`,
+    );
+    const category = habit.category_id
+      ? categoriesById.get(habit.category_id) ?? null
+      : null;
+    const habitType = habit.habit_type ?? "boolean";
+    const targetValue = habit.target_value ?? null;
+    const frequencyType = habit.frequency_type ?? "daily";
+    const frequencyValue = habit.frequency_value ?? null;
+    const frequencyDays = habit.frequency_days ?? [];
+    const streakSummary = calculateHabitStreaks(
+      {
+        createdAt: habit.created_at,
+        frequencyType,
+        frequencyValue,
+        frequencyDays,
+      },
+      completionDates,
+      todayIso,
+    );
 
     return {
       id: habit.id,
       name: habit.name,
       createdAt: habit.created_at,
-      completedToday: completionDates.includes(todayIso),
-      streak: calculateCurrentStreak(completionDates, todayIso),
+      completedToday: isHabitDayCompleted(
+        hasCompletionToday,
+        habitType,
+        currentValue,
+        targetValue,
+      ),
+      streak: streakSummary.current,
+      categoryId: habit.category_id ?? null,
+      categoryName: category?.name ?? null,
+      categoryColor: category?.color ?? null,
+      habitType,
+      targetValue,
+      unit: habit.unit ?? null,
+      frequencyType,
+      frequencyValue,
+      frequencyDays,
+      expectedToday: isHabitExpectedOnDate(
+        {
+          createdAt: habit.created_at,
+          frequencyType,
+          frequencyValue,
+          frequencyDays,
+        },
+        todayIso,
+      ),
+      completionDates,
+      currentValue:
+        habitType === "quantified"
+          ? currentValue
+          : isHabitDayCompleted(hasCompletionToday, habitType, currentValue, targetValue)
+            ? 1
+            : null,
     };
   });
 }
@@ -51,13 +130,88 @@ export default async function Home() {
   }
 
   const todayIso = getTodayIso();
+  const latestMigrationPath =
+    "/Users/rajatgulati/Documents/Codex/2026-04-22-create-a-new-next-js-14/habit-tracker/supabase/migrations/202604230003_add_habit_frequency.sql";
 
-  const { data: habitsData, error: habitsError } = await supabase
-    .from("habits")
-    .select("id, name, created_at")
-    .eq("user_id", user.id)
-    .eq("archived", false)
-    .order("created_at", { ascending: true });
+  const [{ data: categoriesData, error: categoriesError }, { data: habitsData, error: habitsError }] =
+    await Promise.all([
+      supabase
+        .from("categories")
+        .select("id, name, color, created_at")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true }),
+      supabase
+        .from("habits")
+        .select(
+          "id, name, created_at, category_id, habit_type, target_value, unit, frequency_type, frequency_value, frequency_days",
+        )
+        .eq("user_id", user.id)
+        .eq("archived", false)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  if (categoriesError) {
+    if (isMissingHabitsTableError(categoriesError)) {
+      return (
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="rounded-[2rem] border border-amber-200 bg-white/90 p-6 shadow-sm sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-700">
+              One setup step left
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+              Your app needs the latest Supabase migration before categories can
+              load.
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+              The app can sign in, but your database is missing the newer schema
+              changes for categories. Once that migration runs, the dashboard
+              will be able to show grouped habits and category choices.
+            </p>
+            <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+              <p className="text-sm font-semibold text-slate-900">
+                What to do now
+              </p>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-600">
+                <li>Open the Supabase SQL Editor for your project.</li>
+                <li>Paste the latest migration SQL from this workspace.</li>
+                <li>Run it once.</li>
+                <li>Refresh this page.</li>
+              </ol>
+            </div>
+          </section>
+
+          <aside className="space-y-6">
+            <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-600">
+                SQL File
+              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Use:</p>
+              <p className="mt-2 break-all text-sm font-medium text-slate-900">
+                {latestMigrationPath}
+              </p>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Signed in
+              </p>
+              <p className="mt-3 break-all text-sm font-medium text-slate-700">
+                {user.email}
+              </p>
+            </div>
+          </aside>
+        </div>
+      );
+    }
+
+    throw new Error("Could not load categories.");
+  }
+
+  const categories = ((categoriesData ?? []) as CategoryRow[]).map((category) => ({
+    id: category.id,
+    name: category.name,
+    color: category.color,
+  }));
 
   if (habitsError) {
     if (isMissingHabitsTableError(habitsError)) {
@@ -129,7 +283,7 @@ export default async function Home() {
   if (habitIds.length > 0) {
     const { data: completionsData, error: completionsError } = await supabase
       .from("habit_completions")
-      .select("habit_id, completed_on")
+      .select("habit_id, completed_on, value")
       .eq("user_id", user.id)
       .in("habit_id", habitIds);
 
@@ -140,7 +294,7 @@ export default async function Home() {
     completions = (completionsData ?? []) as HabitCompletionRow[];
   }
 
-  const habitItems = buildHabitItems(habits, completions, todayIso);
+  const habitItems = buildHabitItems(habits, completions, categories, todayIso);
   const completedTodayCount = habitItems.filter((habit) => habit.completedToday)
     .length;
   const longestCurrentStreak = habitItems.reduce(
@@ -197,7 +351,7 @@ export default async function Home() {
           </div>
         </div>
 
-        <AddHabitForm />
+        <AddHabitForm categories={categories} />
 
         <div className="rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">

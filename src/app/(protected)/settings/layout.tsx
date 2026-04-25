@@ -1,10 +1,21 @@
 import Link from "next/link";
+import { PwaStatus } from "@/components/pwa/pwa-status";
 
 const settingsLinks = [
+  {
+    href: "/settings/reminders",
+    label: "Reminders",
+    description: "Choose when daily email nudges should show up.",
+  },
   {
     href: "/settings/archived",
     label: "Archived Habits",
     description: "Restore retired habits or delete them for good.",
+  },
+  {
+    href: "/settings/categories",
+    label: "Categories",
+    description: "Adjust names, colors, and category cleanup rules.",
   },
 ];
 
@@ -20,7 +31,7 @@ export default function SettingsLayout({
           Settings
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
-          Manage the parts of your tracker you&apos;re not using every day.
+          Manage the parts of your tracker that quietly keep everything running.
         </h1>
         <nav className="mt-6 flex flex-col gap-3">
           {settingsLinks.map((link) => (
@@ -36,6 +47,10 @@ export default function SettingsLayout({
             </Link>
           ))}
         </nav>
+
+        <div className="mt-6">
+          <PwaStatus />
+        </div>
       </aside>
 
       <div className="space-y-6">{children}</div>

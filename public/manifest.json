@@ -1,0 +1,21 @@
+{
+  "name": "Habit Tracker",
+  "short_name": "Habits",
+  "description": "Habit Tracker helps users build consistency with simple daily habit tracking. It gives each user a private space to create habits, mark them complete each day, and quickly understand short-term progress through streaks and a weekly summary.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

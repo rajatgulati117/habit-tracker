@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthFormProps = {
@@ -37,12 +37,18 @@ export function AuthForm({ mode, initialMessage }: AuthFormProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const content = copy[mode];
+  const [isNavigating, startTransition] = useTransition();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState(initialMessage ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    router.prefetch("/");
+    router.prefetch(content.alternateHref);
+  }, [content.alternateHref, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,8 +69,10 @@ export function AuthForm({ mode, initialMessage }: AuthFormProps) {
         }
 
         if (data.session) {
-          router.replace("/");
-          router.refresh();
+          setInfoMessage("Opening your dashboard...");
+          startTransition(() => {
+            router.replace("/");
+          });
           return;
         }
 
@@ -85,8 +93,10 @@ export function AuthForm({ mode, initialMessage }: AuthFormProps) {
         return;
       }
 
-      router.replace("/");
-      router.refresh();
+      setInfoMessage("Opening your dashboard...");
+      startTransition(() => {
+        router.replace("/");
+      });
     } catch {
       setErrorMessage("Something went wrong. Please try again.");
     } finally {
@@ -152,10 +162,10 @@ export function AuthForm({ mode, initialMessage }: AuthFormProps) {
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isNavigating}
           className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isSubmitting ? content.loading : content.button}
+          {isSubmitting || isNavigating ? content.loading : content.button}
         </button>
       </form>
 
