@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { type User } from "@supabase/supabase-js";
 import { type HabitCompletionRow, type HabitRow } from "@/lib/habits";
 import {
@@ -16,6 +15,35 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+async function sendReminderEmail(input: {
+  apiKey: string;
+  fromEmail: string;
+  toEmail: string;
+  subject: string;
+  html: string;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: input.fromEmail,
+      to: input.toEmail,
+      subject: input.subject,
+      html: input.html,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Resend request failed: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
 
 function getReminderName(user: User) {
   const metadata = user.user_metadata ?? {};
@@ -55,7 +83,6 @@ export async function GET(request: Request) {
     }
 
     const supabase = createAdminClient();
-    const resend = new Resend(resendApiKey);
     const now = new Date();
     const appUrl = getAppUrl();
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
@@ -225,16 +252,13 @@ export async function GET(request: Request) {
           appUrl,
         });
 
-        const sendResult = await resend.emails.send({
-          from: fromEmail,
-          to: user.email,
+        await sendReminderEmail({
+          apiKey: resendApiKey,
+          fromEmail,
+          toEmail: user.email,
           subject: "Your habits still have a few open check-ins today",
           html,
         });
-
-        if (sendResult.error) {
-          throw new Error(sendResult.error.message);
-        }
 
         console.info(
           `[reminders] provider=resend user=${preference.user_id} timezone=${preference.timezone} date=${localTodayIso} habits=${incompleteHabits.length}`,
